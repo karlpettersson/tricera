@@ -32,7 +32,7 @@ package tricera
 
 import hornconcurrency.ParametricEncoder
 
-import java.io.{FileOutputStream, PrintStream}
+import java.io.{FileOutputStream, PrintStream, PrintWriter}
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.horn.bottomup.Util.DagNode
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
@@ -361,6 +361,7 @@ class Main (args: Array[String]) {
     }
 
     val (smallSystem, mergedToOriginal) = system.mergeLocalTransitionsWithBackMapping
+    println(mergedToOriginal) // rodo: remove
 
 //    mergedToOriginal.foreach{
 //      case (c, cs) =>
@@ -412,6 +413,17 @@ class Main (args: Array[String]) {
 
     if (printIntermediateClauseSets)
       return ExecutionSummary(DidNotExecute, Nil, modelledHeap, 0, preprocessTimer.s)
+
+    if(true) {// todo: get a flag for witness output
+      val pw = new PrintWriter(new File("witness.graphml")) // todo: handle exception?
+      pw.write("""<?xml version="1.0" encoding="UTF-8"?>""") // Header
+      pw.write("""
+                |<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">""".stripMargin)
+
+      pw.write("""
+                |</graphml>""".stripMargin)
+      pw.close()
+    }
 
     val executionResult = result match {
       case Left(res) =>
