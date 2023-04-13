@@ -570,7 +570,7 @@ class Main (args: Array[String]) {
           // Generate the key-tags
 
           // Generate nodes/edges from clausesToUnmergedRichClauses
-          clauseToUnmergedRichClauses.foreach(pair => pair._2.foreach(a => println(s"${a}")))
+          clauseToUnmergedRichClauses.foreach(pair => pair._2.foreach(a => println(s"${a.clause.head}"))) // todo: generate nodes from .head with edges from body.
 
           // Edge data from cex as well as violation state.
 
