@@ -361,7 +361,6 @@ class Main (args: Array[String]) {
     }
 
     val (smallSystem, mergedToOriginal) = system.mergeLocalTransitionsWithBackMapping
-    println(mergedToOriginal) // rodo: remove
 
 //    mergedToOriginal.foreach{
 //      case (c, cs) =>
@@ -413,17 +412,6 @@ class Main (args: Array[String]) {
 
     if (printIntermediateClauseSets)
       return ExecutionSummary(DidNotExecute, Nil, modelledHeap, 0, preprocessTimer.s)
-
-    if(true) {// todo: get a flag for witness output
-      val pw = new PrintWriter(new File("witness.graphml")) // todo: handle exception?
-      pw.write("""<?xml version="1.0" encoding="UTF-8"?>""") // Header
-      pw.write("""
-                |<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">""".stripMargin)
-
-      pw.write("""
-                |</graphml>""".stripMargin)
-      pw.close()
-    }
 
     val executionResult = result match {
       case Left(res) =>
@@ -569,6 +557,28 @@ class Main (args: Array[String]) {
             }
             (clause -> richClauses)
         }.toMap
+
+        //println(clauseToUnmergedRichClauses) // todo: remove 
+        //println(cex) // todo: remove
+
+        if(true) {// todo: get a flag for witness output
+        val pw = new PrintWriter(new File("witness.graphml")) // todo: handle exception
+          pw.write("""<?xml version="1.0" encoding="UTF-8"?>""") // Header
+          pw.write("""
+                    |<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">""".stripMargin)
+
+          // Generate the key-tags
+
+          // Generate nodes/edges from clausesToUnmergedRichClauses
+          clauseToUnmergedRichClauses.foreach(pair => pair._2.foreach(a => println(s"${a}")))
+
+          // Edge data from cex as well as violation state.
+
+          pw.write("""
+                    |</graphml>""".stripMargin)
+
+          pw.close()
+        }
 
         if (plainCEX) {
           if (cex._1 == Nil) { // todo: print cex when hornConcurrency no longer returns Nil
