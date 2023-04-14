@@ -42,6 +42,7 @@ import tricera.benchmarking.Benchmarking._
 import tricera.concurrency.CCReader.{CCClause, ParseException, TranslationException}
 
 import sys.process._
+import java.io.FileWriter
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -558,26 +559,30 @@ class Main (args: Array[String]) {
             (clause -> richClauses)
         }.toMap
 
-        //println(clauseToUnmergedRichClauses) // todo: remove 
-        //println(cex) // todo: remove
+       println(clauseToUnmergedRichClauses) // todo: remove
 
         if(true) {// todo: get a flag for witness output
-        val pw = new PrintWriter(new File("witness.graphml")) // todo: handle exception
-          pw.write("""<?xml version="1.0" encoding="UTF-8"?>""") // Header
-          pw.write("""
-                    |<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">""".stripMargin)
+          val pw = new PrintWriter(new File("witness.graphml"))
+          val nodeBuffer = new xml.NodeBuffer
+          val pp = new scala.xml.PrettyPrinter(80, 4)
 
-          // Generate the key-tags
+            for ((k,v) <- clauseToUnmergedRichClauses) {
+              for (c <- v) {
+                println(c.clause.head) // todo: remove print. Handle entry state.
+                if (c.clause.head.toString == "FALSE") { // make better comparison
+                  nodeBuffer += <node id={c.clause.head.toString}><data key="violation">true</data></node> // todo: name the states to something else
+                }
+                else {
+                  nodeBuffer += <node id={c.clause.head.toString}></node>
+                }
+              }
+            }
 
-          // Generate nodes/edges from clausesToUnmergedRichClauses
-          clauseToUnmergedRichClauses.foreach(pair => pair._2.foreach(a => println(s"${a.clause.head}"))) // todo: generate nodes from .head with edges from body.
-
-          // Edge data from cex as well as violation state.
-
-          pw.write("""
-                    |</graphml>""".stripMargin)
-
-          pw.close()
+            val graphml = <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">{nodeBuffer}</graphml>
+            
+            pw.write(pp.format(graphml))
+            pw.close()
+            //scala.xml.XML.save("witness.graphml", pp.format(graphml)) // todo: handle exception
         }
 
         if (plainCEX) {
