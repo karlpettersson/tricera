@@ -43,6 +43,9 @@ import tricera.concurrency.CCReader.{CCClause, ParseException, TranslationExcept
 
 import sys.process._
 import java.io.FileWriter
+import lazabs.horn.preprocessor.HornPreprocessor
+import hornconcurrency.VerificationLoop
+import java.time.temporal.ChronoUnit
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -348,6 +351,120 @@ class Main (args: Array[String]) {
         }
       }
     }
+    
+    // todo: handle function calls?
+    // todo: fix pararmeter types
+    // mergedToOriginal contains line info
+    def createWitness(result: Either[Option[Map[ap.terfor.preds.Predicate,ap.parser.IFormula]],(Seq[hornconcurrency.VerificationLoop.CEXStep], lazabs.horn.bottomup.Util.Dag[(ap.parser.IAtom, lazabs.horn.bottomup.HornClauses.Clause)])], mergedToOriginal: Map[Clause, Seq[CCClause]]) : Unit = { //todo: change types of params
+      import java.security.MessageDigest
+      import java.time._
+      import java.time.format.DateTimeFormatter
+
+      val pw = new PrintWriter(new File("witness.graphml"))
+      val pp = new scala.xml.PrettyPrinter(160, 4) // todo: change arguments
+
+      val dataBuffer = new xml.NodeBuffer
+      val nodeBuffer = new xml.NodeBuffer
+      val edgeBuffer = new xml.NodeBuffer
+
+      val keys = <key id="programfile" attr.name="programfile" for="graph"/>
+                 <key id="programhash" attr.name="programhash" for="graph"/>
+                 <key id="sourcecodelang" attr.name="sourcecodelang" for="graph"/>
+                 <key id="producer" attr.name="producer" for="graph"/>
+                 <key id="specification" attr.name="specification" for="graph"/>
+                 <key id="creationtime" attr.name="creationtime" for="graph"/>
+                 <key id="witness_type" attr.name="witness-type" for="graph"/>
+                 <key id="architecture" attr.name="architecture" for="graph"/>
+                 <key id="entry" attr.name="entry" for="node"><default>false</default></key>
+                 <key id="violation" attr.name="violation" for="node"><default>false</default></key>
+                 <key id="invariant" attr.name="invariant" for="node"><default>true</default></key>
+                 
+      val fileNameHash = MessageDigest.getInstance("SHA-256").digest(fileName.getBytes("UTF-8")).map("%02x".format(_)).mkString
+
+      println("MERGEDTOORIGINAL: " + mergedToOriginal)
+      
+      dataBuffer += <data key="programfile">{fileName}</data>
+      dataBuffer += <data key="programhash">{fileNameHash}</data>
+      dataBuffer += <data key="sourcecodelang">{"C"}</data>
+      dataBuffer += <data key="producer">{"Tricera"}</data>
+      //todo: data for specifiction. How do I get that?
+      dataBuffer += <data key="specification"></data>
+      //todo: add architecture
+      dataBuffer += <data key="architecture"></data>
+      dataBuffer += <data key="creationtime">{ZonedDateTime.now( ZoneOffset.UTC ).truncatedTo(ChronoUnit.MINUTES).format( DateTimeFormatter.ISO_INSTANT )}</data>
+      
+      val states = system.processes.head._1.map{ case (clause, _) => clause.head }.distinct
+      //todo: handle multiple incoming edges
+      val edges = system.processes.head._1.map{case (clause, _) => (clause.head, if (!clause.body.isEmpty) clause.body.apply(0) else "")}
+
+      val edgesWithSrcLine = (system.processes.head._1.map{
+                                            case (clause, syncType) => (clause)
+                                          }).map(reader.getRichClause)
+
+
+      for (e <- edgesWithSrcLine) {
+        //println("Line num: " + e.head.srcInfo.get.line)
+        //println("Target:" + e.head.clause.head)
+        //println("Source:" +  (!e.head.clause.body.isEmpty) e.head.clause.body.apply(0) else "")
+      }
+
+      //println(edges)
+
+      // val clauseToSrcInfo : Map[Clause, Option[SourceInfo]] =
+      // (system.processes.flatMap(_._1.map(_._1)) ++
+      // system.assertions).map(reader.getRichClause).filter(_.nonEmpty).map(c =>
+      // (c.get.clause, c.get.srcInfo)).toMap
+
+      //println(clauseToSrcInfo)
+
+      result match {
+        case Left(solution) =>
+          //todo: impl
+          dataBuffer += <data key ="witness_type">{"correctness_witness"}</data>
+        case Right(cex) =>
+          dataBuffer += <data key ="witness_type">{"violation_witness"}</data>
+
+          println(cex._2)
+
+          val edgesToViolation = system.assertions.map{ clause => (clause.head, clause.body.head)} // todo: Could there be several incoming edges to violation state?
+          val edgesWithViolation = edges ++ edgesToViolation
+
+          //todo: This now assume that the list always comes in the same order. Will that be a problem? 
+          val entryNode = <node id={states.head.toString()}><data key="entry">true</data></node>
+          
+          //Generate violation states and edges to them
+          for ((s,i) <- system.assertions.zipWithIndex) {
+            nodeBuffer += <node id={s.head.toString() + i}><data key="violation">true</data></node>
+            // todo: handle multiple incoming edges? can a violation stae have several incoming edges?
+            edgeBuffer += <edge source={s.head.toString() + i} target={s.body.head.toString()}></edge>
+          }
+
+          nodeBuffer += entryNode
+
+          // Create nodes. Head of states is entry node, which is allready handled above.
+          for (s <- states.tail) nodeBuffer +=  <node id={s.toString()}></node>
+          // Create edges. Head of edges is entry node and thus have no incoming edge.
+          for (e <- edgesWithSrcLine.tail) {
+            // todo: add variable assignments here. If *something* true, add assumption else false.
+            println(e.head.clause.head)
+            val assumption = if (false) <data></data> else xml.Node.EmptyNamespace 
+            edgeBuffer += <edge source={e.head.clause.body.apply(0).toString} target={e.head.clause.head.toString}>
+                          <data key="startline">{e.head.srcInfo.get.line.toString}</data>
+                          {assumption}
+                          </edge>
+          }
+
+        case _ =>
+          println("Witness creation failed.")
+          return
+      }
+
+      val graphml = <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">{keys}<graph edgedefault ="directed">{dataBuffer}{nodeBuffer}{edgeBuffer}</graph></graphml>
+        
+      pw.write(pp.format(graphml))
+      pw.close()
+    }
+
     if(devMode) // todo: make part of -assert?
       checkForSameNamedTerms
 
@@ -361,14 +478,15 @@ class Main (args: Array[String]) {
       tricera.concurrency.ReaderMain.printClauses(system, reader.PredPrintContext, clauseToSrcInfo)
     }
 
+    
     val (smallSystem, mergedToOriginal) = system.mergeLocalTransitionsWithBackMapping
 
-//    mergedToOriginal.foreach{
-//      case (c, cs) =>
-//        println(c.toPrologString)
-//        cs.foreach(origC => println("  " + origC.toPrologString))
-//        println("-"*80)
-//    }
+  //  mergedToOriginal.foreach{
+  //    case (c, cs) =>
+  //      println(c.toPrologString)
+  //      cs.foreach(origC => println("  " + origC.toPrologString))
+  //      println("-"*80)
+  //  }
 
     if (prettyPrint) {
       println
@@ -559,31 +677,7 @@ class Main (args: Array[String]) {
             (clause -> richClauses)
         }.toMap
 
-       println(clauseToUnmergedRichClauses) // todo: remove
-
-        if(true) {// todo: get a flag for witness output
-          val pw = new PrintWriter(new File("witness.graphml"))
-          val nodeBuffer = new xml.NodeBuffer
-          val pp = new scala.xml.PrettyPrinter(80, 4)
-
-            for ((k,v) <- clauseToUnmergedRichClauses) {
-              for (c <- v) {
-                println(c.clause.head) // todo: remove print. Handle entry state.
-                if (c.clause.head.toString == "FALSE") { // make better comparison
-                  nodeBuffer += <node id={c.clause.head.toString}><data key="violation">true</data></node> // todo: name the states to something else
-                }
-                else {
-                  nodeBuffer += <node id={c.clause.head.toString}></node>
-                }
-              }
-            }
-
-            val graphml = <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">{nodeBuffer}</graphml>
-            
-            pw.write(pp.format(graphml))
-            pw.close()
-            //scala.xml.XML.save("witness.graphml", pp.format(graphml)) // todo: handle exception
-        }
+        createWitness(result = result, clauseToUnmergedRichClauses) // todo: create flag
 
         if (plainCEX) {
           if (cex._1 == Nil) { // todo: print cex when hornConcurrency no longer returns Nil

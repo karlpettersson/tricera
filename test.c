@@ -6,6 +6,10 @@ void main() {
     int b = _;
 
     if (a!=b) {
+            reach_error();
+    }
+    else {
         reach_error();
     }
+    
 }
