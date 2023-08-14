@@ -8,8 +8,4 @@ void main() {
     if (a!=b) {
             reach_error();
     }
-    else {
-        reach_error();
-    }
-    
 }

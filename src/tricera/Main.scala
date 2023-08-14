@@ -353,8 +353,8 @@ class Main (args: Array[String]) {
     }
     
     // todo: handle function calls?
-    // todo: fix pararmeter types
     // mergedToOriginal contains line info
+    // todo: fix pararmeter types
     def createWitness(result: Either[Option[Map[ap.terfor.preds.Predicate,ap.parser.IFormula]],(Seq[hornconcurrency.VerificationLoop.CEXStep], lazabs.horn.bottomup.Util.Dag[(ap.parser.IAtom, lazabs.horn.bottomup.HornClauses.Clause)])], mergedToOriginal: Map[Clause, Seq[CCClause]]) : Unit = { //todo: change types of params
       import java.security.MessageDigest
       import java.time._
@@ -380,8 +380,6 @@ class Main (args: Array[String]) {
                  <key id="invariant" attr.name="invariant" for="node"><default>true</default></key>
                  
       val fileNameHash = MessageDigest.getInstance("SHA-256").digest(fileName.getBytes("UTF-8")).map("%02x".format(_)).mkString
-
-      println("MERGEDTOORIGINAL: " + mergedToOriginal)
       
       dataBuffer += <data key="programfile">{fileName}</data>
       dataBuffer += <data key="programhash">{fileNameHash}</data>
@@ -401,21 +399,11 @@ class Main (args: Array[String]) {
                                             case (clause, syncType) => (clause)
                                           }).map(reader.getRichClause)
 
-
-      for (e <- edgesWithSrcLine) {
-        //println("Line num: " + e.head.srcInfo.get.line)
-        //println("Target:" + e.head.clause.head)
-        //println("Source:" +  (!e.head.clause.body.isEmpty) e.head.clause.body.apply(0) else "")
-      }
-
-      //println(edges)
-
-      // val clauseToSrcInfo : Map[Clause, Option[SourceInfo]] =
-      // (system.processes.flatMap(_._1.map(_._1)) ++
-      // system.assertions).map(reader.getRichClause).filter(_.nonEmpty).map(c =>
-      // (c.get.clause, c.get.srcInfo)).toMap
-
-      //println(clauseToSrcInfo)
+      // for (e <- edgesWithSrcLine) {
+      //   println("Line num: " + e.head.srcInfo.get.line)
+      //   println("Target:" + e.head.clause.head)
+      //   println("Source:" +  (!e.head.clause.body.isEmpty) e.head.clause.body.apply(0) else "")
+      // }
 
       result match {
         case Left(solution) =>
@@ -424,10 +412,12 @@ class Main (args: Array[String]) {
         case Right(cex) =>
           dataBuffer += <data key ="witness_type">{"violation_witness"}</data>
 
-          println(cex._2)
+          // Values and arg-name for cex
+          println(cex._2.tail.head._2.allAtoms.head.args)
+          println(cex._2.tail.head._1.args)
 
-          val edgesToViolation = system.assertions.map{ clause => (clause.head, clause.body.head)} // todo: Could there be several incoming edges to violation state?
-          val edgesWithViolation = edges ++ edgesToViolation
+          // val edgesToViolation = system.assertions.map{ clause => (clause.head, clause.body.head)}
+          // val edgesWithViolation = edges ++ edgesToViolation
 
           //todo: This now assume that the list always comes in the same order. Will that be a problem? 
           val entryNode = <node id={states.head.toString()}><data key="entry">true</data></node>
@@ -436,7 +426,7 @@ class Main (args: Array[String]) {
           for ((s,i) <- system.assertions.zipWithIndex) {
             nodeBuffer += <node id={s.head.toString() + i}><data key="violation">true</data></node>
             // todo: handle multiple incoming edges? can a violation stae have several incoming edges?
-            edgeBuffer += <edge source={s.head.toString() + i} target={s.body.head.toString()}></edge>
+            edgeBuffer += <edge source={s.body.head.toString()} target={s.head.toString() + i}></edge>
           }
 
           nodeBuffer += entryNode
@@ -445,11 +435,12 @@ class Main (args: Array[String]) {
           for (s <- states.tail) nodeBuffer +=  <node id={s.toString()}></node>
           // Create edges. Head of edges is entry node and thus have no incoming edge.
           for (e <- edgesWithSrcLine.tail) {
-            // todo: add variable assignments here. If *something* true, add assumption else false.
-            println(e.head.clause.head)
-            val assumption = if (false) <data></data> else xml.Node.EmptyNamespace 
+            // todo: add variable assignments here. If *something* true add assumption, else empty.
+            val assumption = if (true) <data></data> else xml.Node.EmptyNamespace
+            val srcLine = e.head.srcInfo.map(_.line.toString).getOrElse("")
+
             edgeBuffer += <edge source={e.head.clause.body.apply(0).toString} target={e.head.clause.head.toString}>
-                          <data key="startline">{e.head.srcInfo.get.line.toString}</data>
+                          <data key="startline">{srcLine}</data>
                           {assumption}
                           </edge>
           }
@@ -460,7 +451,7 @@ class Main (args: Array[String]) {
       }
 
       val graphml = <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">{keys}<graph edgedefault ="directed">{dataBuffer}{nodeBuffer}{edgeBuffer}</graph></graphml>
-        
+ 
       pw.write(pp.format(graphml))
       pw.close()
     }
