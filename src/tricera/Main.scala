@@ -355,13 +355,13 @@ class Main (args: Array[String]) {
     // todo: handle function calls?
     // mergedToOriginal contains line info
     // todo: fix pararmeter types
-    def createWitness(result: Either[Option[Map[ap.terfor.preds.Predicate,ap.parser.IFormula]],(Seq[hornconcurrency.VerificationLoop.CEXStep], lazabs.horn.bottomup.Util.Dag[(ap.parser.IAtom, lazabs.horn.bottomup.HornClauses.Clause)])], mergedToOriginal: Map[Clause, Seq[CCClause]]) : Unit = { //todo: change types of params
+    def createWitness(result: Either[Option[Map[ap.terfor.preds.Predicate,ap.parser.IFormula]],(Seq[hornconcurrency.VerificationLoop.CEXStep], lazabs.horn.bottomup.Util.Dag[(ap.parser.IAtom, lazabs.horn.bottomup.HornClauses.Clause)])], richClauses: Map[Clause, Seq[CCClause]]) : Unit = { //todo: change types of params
       import java.security.MessageDigest
       import java.time._
       import java.time.format.DateTimeFormatter
 
       val pw = new PrintWriter(new File("witness.graphml"))
-      val pp = new scala.xml.PrettyPrinter(160, 4) // todo: change arguments
+      val pp = new scala.xml.PrettyPrinter(160, 0) // todo: change arguments
 
       val dataBuffer = new xml.NodeBuffer
       val nodeBuffer = new xml.NodeBuffer
@@ -412,38 +412,82 @@ class Main (args: Array[String]) {
         case Right(cex) =>
           dataBuffer += <data key ="witness_type">{"violation_witness"}</data>
 
-          // Values and arg-name for cex
-          println(cex._2.tail.head._2.allAtoms.head.args)
-          println(cex._2.tail.head._1.args)
+          cex._2.iterator.zipWithIndex.foreach { // note: assumes order of DAG is reversed.
+            case ((state, (clause)), index) =>
+              var assumption: String = ""
+
+              // Add assumption. args and allAtoms head are in order. (But not with loops?)
+
+              state.args.zipWithIndex.foreach {
+                case (n, index) =>
+                  assumption = assumption + clause.allAtoms.head.apply(index) + "=" + n.toString() + ";"
+              }
+
+              println(assumption)
+
+              println("State args" + state.args)
+              println("state pred" + state.pred)
+              println("All atoms" + clause.allAtoms.head)
+
+
+              val assumptionTag =
+                if (!assumption.isEmpty) {
+                  <data key="assumption">{ assumption }</data>
+                } else {
+                  xml.Node.EmptyNamespace
+                }
+
+              // Add incoming edges of state. todo: how to handle assumptions on multiple incoming edges? skip that for now?
+              clause.bodyPredicates.foreach(e =>
+                edgeBuffer += <edge source={e.toString()} target={state.toString()}>{assumptionTag}</edge>
+              )
+
+              if (index == 0) { // Violation state
+                nodeBuffer += <node id={state.toString()}><data key="violation">true</data></node>
+
+                // richClauses.foreach{
+                //   case (c, seq) =>
+                //     if (c == clause) {
+                //       println(c.)
+                //     }
+                // }
+              }
+              else if (index == cex._2.size - 1) { // Entry state
+                nodeBuffer += <node id={state.toString()}><data key="entry">true</data></node>
+              }
+              else {
+                nodeBuffer += <node id={state.toString()}></node>
+              }
+          }
 
           // val edgesToViolation = system.assertions.map{ clause => (clause.head, clause.body.head)}
           // val edgesWithViolation = edges ++ edgesToViolation
 
-          //todo: This now assume that the list always comes in the same order. Will that be a problem? 
-          val entryNode = <node id={states.head.toString()}><data key="entry">true</data></node>
-          
-          //Generate violation states and edges to them
-          for ((s,i) <- system.assertions.zipWithIndex) {
-            nodeBuffer += <node id={s.head.toString() + i}><data key="violation">true</data></node>
-            // todo: handle multiple incoming edges? can a violation stae have several incoming edges?
-            edgeBuffer += <edge source={s.body.head.toString()} target={s.head.toString() + i}></edge>
-          }
-
-          nodeBuffer += entryNode
-
-          // Create nodes. Head of states is entry node, which is allready handled above.
-          for (s <- states.tail) nodeBuffer +=  <node id={s.toString()}></node>
-          // Create edges. Head of edges is entry node and thus have no incoming edge.
-          for (e <- edgesWithSrcLine.tail) {
-            // todo: add variable assignments here. If *something* true add assumption, else empty.
-            val assumption = if (true) <data></data> else xml.Node.EmptyNamespace
-            val srcLine = e.head.srcInfo.map(_.line.toString).getOrElse("")
-
-            edgeBuffer += <edge source={e.head.clause.body.apply(0).toString} target={e.head.clause.head.toString}>
-                          <data key="startline">{srcLine}</data>
-                          {assumption}
-                          </edge>
-          }
+//          //todo: This now assume that the list always comes in the same order. Will that be a problem?
+//          val entryNode = <node id={states.head.toString()}><data key="entry">true</data></node>
+//
+//          //Generate violation states and edges to them
+//          for ((s,i) <- system.assertions.zipWithIndex) {
+//            nodeBuffer += <node id={s.head.toString() + i}><data key="violation">true</data></node>
+//            // todo: handle multiple incoming edges? can a violation stae have several incoming edges?
+//            edgeBuffer += <edge source={s.body.head.toString()} target={s.head.toString() + i}></edge>
+//          }
+//
+//          nodeBuffer += entryNode
+//
+//          // Create nodes. Head of states is entry node, which is allready handled above.
+//          for (s <- states.tail) nodeBuffer +=  <node id={s.toString()}></node>
+//          // Create edges. Head of edges is entry node and thus have no incoming edge.
+//          for (e <- edgesWithSrcLine.tail) {
+//            // todo: add variable assignments here. If *something* true add assumption, else empty.
+//            val assumption = if (true) <data></data> else xml.Node.EmptyNamespace
+//            val srcLine = e.head.srcInfo.map(_.line.toString).getOrElse("")
+//
+//            edgeBuffer += <edge source={e.head.clause.body.apply(0).toString} target={e.head.clause.head.toString}>
+//                          <data key="startline">{srcLine}</data>
+//                          {assumption}
+//                          </edge>
+//          }
 
         case _ =>
           println("Witness creation failed.")
